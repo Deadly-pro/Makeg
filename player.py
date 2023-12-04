@@ -1,55 +1,50 @@
 from ursina import *
 from ursina.prefabs.health_bar import HealthBar
 import guns,enemy
-sign = lambda x: -1 if x < 0 else (1 if x > 0 else 0)
-y_dir = lambda y: -1 if y < 0 else(1 if y > 0 else -1)
+
+
 class Player(Entity):
-    def __init__(self,**kwargs):
-        super().__init__(self,**kwargs)
-        #player physics
-        self.tag="player"
-        self.parent=scene
-        self.scale=1
-        self.jump_height=10
-        self.cursor=False
-        self.velocity = (0, -1, 0)
-        self.speed=5
-        self.velocity_x = self.velocity[0]
-        self.velocity_y = self.velocity[1]
-        self.velocity_z = self.velocity[2]
-        self.movementX=0
-        self.movementZ=0
-        self.movementY=0
-        self.collider=BoxCollider(self,size=(self.scale_x,self.scale_y,self.scale_z))
-        self.gravity=1
-        self.jump_up_duration = 0.25
-        self.fall_after = 0.25
-        self.jumping = False
-        self.air_time = 1
-        self.grounded=True
-        #camera
-        self.traverse_target=scene
-        self.ignore_list=[self,enemy]  
-        self.camera_pivot=Entity(parent=self,y=self.scale_y)
-        camera.parent = self
-        #camera.position = (0,0,0)
+    def __init__(self, **kwargs):
+        self.cursor = Entity(parent=camera.ui, model='quad', color=color.pink, scale=.008, rotation_z=45)
+        super().__init__(scale=1)
+        self.speed = 20
+        self.height = 2
+        self.momentum=2
+        self.camera_pivot = Entity(parent=self, y=self.height)
+
+        camera.parent = self.camera_pivot
+        camera.position = (0,0,0)
         camera.rotation = (0,0,0)
         camera.fov = 90
         mouse.locked = True
-        mouse.position=Vec3(0,0,0)
-        self.mouse_sensitivity = 25
-    
+        self.mouse_sensitivity = Vec2(40, 40)
+
+        self.gravity = 1
+        self.grounded = False
+        self.jump_height = 5
+        self.jump_up_duration = .5
+        self.fall_after = .35  #player will fall down within this time 
+        self.jumping = False
+        self.air_time = 0
+
+        self.traverse_target = scene     
+        self.ignore_list = [self,enemy]
+        self.on_destroy = self.on_disable
+        
+        #player atributes
+        
         #crosshair
         self.crosshair = Entity(model = "quad", color = color.black, parent = camera, rotation_z = 45, position = (0, 0, 0), scale = 0.5, z = 100, always_on_top = True)
-        
+        mouse.position=Vec3(0,0,0)
+        mouse.locked=True
         #abilities
-        self.health=150
+        self.health=50
         self.ability=10
-        self.healthbar=HealthBar(self.health,bar_color=color.red,always_on_top=True,position=window.top_left,scale=Vec2(.1,0.01))
+        self.healthbar=HealthBar(self.health,bar_color=color.red,always_on_top=True,position=Vec2(-0.88,0.45),parent=camera.ui,scale=Vec2(0.35,0.015))
         self.healthbar.text_entity.disable()
-        self.abilitybar=HealthBar(self.ability,roundness=0.3,bar_color=color.blue,position=Vec2(-7,3.8),scale=Vec2(.25,0.25),always_on_top=True)
-        self.abilitybar.text_entity.disable()
-              
+        self.score=0 
+        score=str(self.score)
+        self.scoreboard=Text(score,parent=camera.ui,position=Vec2(-0.88,0.42))  
         #weapons
         self.sniper=guns.rifle()
         self.sniper.color=color.black
@@ -57,134 +52,73 @@ class Player(Entity):
         self.knife=guns.melee()
         self.weapons=[self.knife,self.sniper]
         self.currentweapon=0
-        #weapon data
-        
+         
+
+        for key, value in kwargs.items():
+            setattr(self, key ,value)
+
+        # make sure we don't fall through the ground if we start inside it
+        if self.gravity:
+            ray = raycast(self.world_position+(0,self.height,0), self.down, traverse_target=self.traverse_target, ignore=self.ignore_list)
+            if ray.hit:
+                self.y = ray.world_point.y
+
+
     def update(self):
-
-        camera.rotation_x -= mouse.velocity[1] * self.mouse_sensitivity
-        self.rotation_y += mouse.velocity[0] * self.mouse_sensitivity
-        camera.rotation_x = min(max(-90, camera.rotation_x), 90)
-
-        self.movementY = self.velocity_y /75 
-        self.velocity_y = clamp(self.velocity_y, -70, 100)
-        direction = (0, sign(self.movementY), 0)
-        rayy = raycast(origin = self.world_position, direction = (0, y_dir(self.velocity_y), 0), traverse_target = self.traverse_target, ignore = [self, ])
-            
-        #adding air time physics
-        self.air_time += time.dt * .25 * self.gravity
-        
-        #collisions
-        if self.movementX != 0:
-            direction = (sign(self.movementX), 0, 0)
-            x_ray = raycast(origin = self.world_position, direction = direction, traverse_target = self.traverse_target, ignore = [self, ])
-            if x_ray.distance<=self.scale_x:
-                self.movementX=0
-            self.x+=self.movementX    
-        if self.movementZ != 0:
-            direction = (0, 0, sign(self.movementZ))
-            z_ray = raycast(origin = self.world_position, direction = direction, traverse_target = self.traverse_target, ignore = [self, ])
-
-            if z_ray.distance > self.scale_z / 2 + abs(self.movementZ):
-                self.z += self.movementZ
-        if self.movementY !=0:
-            y_ray = raycast(origin = self.world_position, direction = direction, traverse_target = self.traverse_target, ignore = [self, ])
-            if y_ray.distance <= self.scale_y * 1 + abs(self.movementY):
-                if not self.grounded:
-                    self.velocity_y = 0
-                    self.grounded = True
-                    self.jumping=False
-
-            # Check if hitting a wall or steep slope
-            if y_dir(self.velocity_y) == -1:
-                if y_ray.world_normal.y > 1 and y_ray.world_point.y - self.world_y < 2:
-                    # Set the y value to the ground's y value
-                    if not held_keys["space"]:
-                        self.y = self.scale_y+self.movementY
-                        self.jumping = False
-
-            if y_ray.distance > self.scale_y / 2+abs(self.movementY):
-                     self.y -= self.movementY
-                     self.jumping=True   
-                     self.grounded=False
-                     
-        #gravity
-        if rayy.hit:
-            if not self.grounded:
-                self.y=-self.movementY 
-                self.grounded=True
-                self.jumping=True
-            elif self.scale_y/2+abs(self.movementY)<=self.jump_height and self.jumping==False:
-                self.grounded=True
-            elif rayy.distance<=self.scale_y/2+abs(self.movementY):
-                self.grounded=True
-                self.jumping=False
-            else:
-                self.grounded=False
-                self.jumping=True            
-        dirxz=Vec3(self.forward * (held_keys['w'] - held_keys['s'])+ self.right * (held_keys['d'] - held_keys['a'])).normalized()
-        rayxz=raycast(self.world_position, direction=dirxz, traverse_target=self.traverse_target, ignore=self.ignore_list,distance=.5)
-        if rayy.hit and self.grounded:
-             self.y=rayy.world_point.y  
-        movement = 10 if rayxz.distance > 5 else 5   
-        #reset
-        if self.y<=-100 or held_keys['g']:
-             self.position=(0,0,0)
-             self.movementX=0
-             self.movementY=0
-             self.movementZ=0
-             self.grounded=True
-             self.jumping=False
-        #controls  
-        if rayxz.distance>= 5 :
-                self.movementX = (self.forward[0] * self.velocity_z + 
-                    self.left[0] * self.velocity_x + 
-                    self.back[0] * -self.velocity_z + 
-                    self.right[0] * -self.velocity_x) * time.dt*self.speed
-
-                self.movementZ = (self.forward[2] * self.velocity_z + 
-                    self.left[2] * self.velocity_x + 
-                    self.back[2] * -self.velocity_z + 
-                    self.right[2] * -self.velocity_x) * time.dt*self.speed
-        if rayy.distance>=self.jump_height:
-             self.movementY=(self.up[1]*self.velocity_y)*time.dt
-            
-        if held_keys['w']:
-            self.velocity_z+=movement*time.dt
-        else:
-            self.velocity_z = lerp(self.velocity_z, 0 if rayxz.distance > 5 else 1, time.dt * 3)
-        if held_keys['a']:
-            self.velocity_x+=movement*time.dt
-        else:
-            self.velocity_x = lerp(self.velocity_x, 0 if rayxz.distance > 5 else 1, time.dt * 3)
-        if held_keys['s']:
-            self.velocity_z-=movement*time.dt
-        else:
-            self.velocity_z = lerp(self.velocity_z, 0 if rayxz.distance > 5 else 1, time.dt * 3)
-        if held_keys['d']:
-            self.velocity_x-=movement*time.dt        
-        else:
-            self.velocity_x = lerp(self.velocity_x, 0 if rayxz.distance > 5 else 1, time.dt * 3)
-        if held_keys['h']:
-            print_on_screen(self.position)
+        score=str(self.score)
         if self.health<=0:
             self.disable()
-            print_on_screen("Warped into a Broken reality",window.center_on_screen,scale=5)   
-        #crouching
-        if held_keys['left shift']:
-            self.camera_pivot.y=2- held_keys['left shift']
-            self.speed=2.5
-        else:
-            self.scale_y=0.8 
-            self.speed=5   
-        #editor functions
-        if held_keys["p"]:
-            self.y+=5   
-         
-    
-    def input(self,key):  
+        self.rotation_y += mouse.velocity[0] * self.mouse_sensitivity[1]
+
+        self.camera_pivot.rotation_x -= mouse.velocity[1] * self.mouse_sensitivity[0]
+        self.camera_pivot.rotation_x= clamp(self.camera_pivot.rotation_x, -90, 90)
+
+        self.direction = Vec3(
+            self.forward * (held_keys['w'] - held_keys['s'])
+            + self.right * (held_keys['d'] - held_keys['a'])
+            ).normalized()
+
+        feet_ray = raycast(self.position+Vec3(0,0.5,0), self.direction, traverse_target=self.traverse_target, ignore=self.ignore_list, distance=.5, debug=False)
+        head_ray = raycast(self.position+Vec3(0,self.height-.1,0), self.direction, traverse_target=self.traverse_target, ignore=self.ignore_list, distance=.5, debug=False)
+        if not feet_ray.hit and not head_ray.hit:
+            move_amount = self.direction * self.speed
+
+            if raycast(self.position+Vec3(-.0,1,0), Vec3(1,0,0), distance=0.5, traverse_target=self.traverse_target, ignore=self.ignore_list).hit:
+                move_amount[0] = min(move_amount[0], 0)
+            if raycast(self.position+Vec3(-.0,1,0), Vec3(-1,0,0), distance=0.5, traverse_target=self.traverse_target, ignore=self.ignore_list).hit:
+                move_amount[0] = max(move_amount[0], 0)
+            if raycast(self.position+Vec3(-.0,1,0), Vec3(0,0,1), distance=0.5, traverse_target=self.traverse_target, ignore=self.ignore_list).hit:
+                move_amount[2] = min(move_amount[2], 0)
+            if raycast(self.position+Vec3(-.0,1,0), Vec3(0,0,-1), distance=0.5, traverse_target=self.traverse_target, ignore=self.ignore_list).hit:
+                move_amount[2] = max(move_amount[2], 0)
+            
+            self.position += move_amount * self.momentum * time.dt
+
+        if self.gravity:
+            # gravity
+            ray = raycast(self.world_position+(0,self.height,0), self.down, traverse_target=self.traverse_target, ignore=self.ignore_list)
+            # ray = boxcast(self.world_position+(0,2,0), self.down, ignore=self.ignore_list)
+
+            if ray.distance <= self.height+.1:
+                if not self.grounded:
+                    self.land()
+                self.grounded = True
+                # make sure it's not a wall and that the point is not too far up
+                if ray.world_normal.y > .7 and ray.world_point.y - self.world_y < .5: # walk up slope
+                    self.y = ray.world_point[1]
+                return
+            else:
+                self.grounded = False
+
+            # if not on ground and not on way up in jump, fall
+            self.y -= min(self.air_time, ray.distance-.05) * time.dt * 100
+            self.air_time += time.dt * .25 * self.gravity
+
+
+    def input(self, key):
+        
         if key == 'space':
             self.jump()
-       
         try:
             self.currentweapon=int(key)-1
             self.switch_weapon()
@@ -195,13 +129,7 @@ class Player(Entity):
         if key=='scroll down':
             self.currentweapon=(self.currentweapon-1)%len(self.weapons)
             self.switch_weapon()   
-
-    def jump(self):
-        self.grounded = False
-        self.jumping=True
-        self.velocity_y+=self.jump_height*self.air_time
-        self.animate_y(self.y+self.jump_height, self.jump_up_duration, resolution=int(1//time.dt), curve=curve.out_expo)
-    
+        
     def switch_weapon(self):
         for i,v in enumerate(self.weapons):
             if i==self.currentweapon:
@@ -212,3 +140,33 @@ class Player(Entity):
                 v.visible=False
                 v.enabled=False
                 v.equiped=False
+    
+    def jump(self):
+        if not self.grounded:
+            return
+
+        self.grounded = False
+        self.animate_y(self.y+self.jump_height, self.jump_up_duration, resolution=int(1//time.dt), curve=curve.out_expo)
+        invoke(self.start_fall, delay=self.fall_after)
+        
+           
+
+    def start_fall(self):
+        self.y_animator.pause()
+        self.jumping = False
+
+    def land(self):
+        # print('land')
+        self.air_time = 0
+        self.grounded = True
+
+
+    def on_enable(self):
+        mouse.locked = True
+        self.cursor.enabled = True
+
+
+    def on_disable(self):
+        #print_info("Man you dead")
+        mouse.locked = False
+        self.cursor.enabled = False
