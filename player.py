@@ -5,13 +5,12 @@ import guns,enemy
 
 class Player(Entity):
     def __init__(self, **kwargs):
-        self.cursor = Entity(parent=camera.ui, model='quad', color=color.pink, scale=.008, rotation_z=45)
         super().__init__(scale=1)
         self.speed = 20
         self.height = 2
         self.momentum=2
         self.camera_pivot = Entity(parent=self, y=self.height)
-
+        self.collision=True
         camera.parent = self.camera_pivot
         camera.position = (0,0,0)
         camera.rotation = (0,0,0)
@@ -43,8 +42,6 @@ class Player(Entity):
         self.healthbar=HealthBar(self.health,bar_color=color.red,always_on_top=True,position=Vec2(-0.88,0.45),parent=camera.ui,scale=Vec2(0.35,0.015))
         self.healthbar.text_entity.disable()
         self.score=0 
-        score=str(self.score)
-        self.scoreboard=Text(score,parent=camera.ui,position=Vec2(-0.88,0.42))  
         #weapons
         self.sniper=guns.rifle()
         self.sniper.color=color.black
@@ -65,7 +62,9 @@ class Player(Entity):
 
 
     def update(self):
-        score=str(self.score)
+        if 100-self.health<=15:
+            self.health+=1
+            self.healthbar.value+=1
         if self.health<=0:
             self.disable()
         self.rotation_y += mouse.velocity[0] * self.mouse_sensitivity[1]
@@ -163,10 +162,8 @@ class Player(Entity):
 
     def on_enable(self):
         mouse.locked = True
-        self.cursor.enabled = True
-
+        
 
     def on_disable(self):
-        #print_info("Man you dead")
         mouse.locked = False
-        self.cursor.enabled = False
+        return "Dead"

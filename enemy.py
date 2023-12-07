@@ -1,16 +1,15 @@
 from ursina import *
-from ursina.shaders import lit_with_shadows_shader
 from ursina.prefabs.health_bar import HealthBar
 from random import *
 class Enemy (Entity):
     def __init__(self,target,x,y,z,**kwargs):
-     super().__init__(self,model="cube",scale=(x,y,z),color=color.red,Shader=lit_with_shadows_shader,**kwargs)
+     super().__init__(self,model="cube",color=color.red,**kwargs)
      self.target=target
-     self.collider=BoxCollider(self,size=(x,y,z))
+     self.position=Vec3(x,y,z)
+     self.scale=1
+     self.collider=BoxCollider(self,size=(1,1,1))
      self.pivot=Entity(position=self.position,parent=self)
      self.tag="enemy"
-     self.position=(300,30,30)
-     self.speed=self.target.speed*random()*random()
      self.health=100
      self.healthbar=HealthBar(self.health,bar_color=color.red,always_on_top=True,scale=Vec2(1,0.2),parent=self.pivot)
      self.healthbar.text_entity.disable()   
@@ -23,7 +22,13 @@ class Enemy (Entity):
           self.color=color.white
       else:
           self.color=color.black  
-      self.position+= Vec3(self.position-self.target.position).normalized()
+      if distance(self.position,self.target.position)<=15:
+         self.speed=0.001
+      else: 
+         self.speed=0.01*random()
+      
+      self.position+= Vec3(self.position-self.target.position).normalized()*self.speed  
+      
       if self.y<=0:
          self.disable()
       self.rotation_z=0
