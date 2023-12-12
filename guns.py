@@ -1,7 +1,5 @@
 from ursina import *
 from ursina import curve
-from Trail import TrailRenderer
-from respawn import Respawn
 class gun (Entity):
     def __init__(self,**kwargs):
      super().__init__(self,scale=0.25,parent=camera.ui,position=(0.7,-0.3),rotation=(0,110,0),visible=False,enabled=False,**kwargs)
@@ -14,8 +12,10 @@ class gun (Entity):
      self.guntype=""
      self.startedshooting=False
      self.equiped=False
+     self.audio=Audio('AKsound.mp3',False)
     def input(self,key):
        if key=="left mouse down":
+          self.audio.play()
           self.shoot()
        elif key=='left mouse up':
             invoke(setattr,self,'startedshooting',False,delay=self.firerate)
@@ -45,17 +45,15 @@ class gun (Entity):
              Bullet(self)
              self.animate('rotation_z',-10, duration = self.firerate, curve = curve.linear)
              self.animate('rotation_z',0, 0.4, delay =self.firerate, curve = curve.linear)
-             invoke(setattr,self,'startedshooting',True,delay=self.firerate)
-             #audio here
+             invoke(setattr,self,'startedshooting',True,delay=self.firerate)             
 
 class Bullet(Entity) :
     def __init__(self,gun):
-       super().__init__(self,model="bullet.obj",scale=0.2,parent=gun,position=gun.tip.world_position)
+       super().__init__(self,scale=0.2,parent=gun,position=gun.tip.world_position)
        self.gun=gun
        self.thickness=8
        self.rotation=camera.rotation
        self.color=color.black
-       self.trail = TrailRenderer(8,color.black,color.clear,5,parent=self)
        if hasattr(self.gun, 'tip'):
            self.rotation=camera.world_rotation
        if mouse.hovered_entity:
@@ -68,9 +66,12 @@ class Bullet(Entity) :
                       if mouse.hovered_entity.tag=='enemy':
                           if mouse.hovered_entity.health>0:
                               mouse.hovered_entity.health-=self.gun.dmg
-                              mouse.hovered_entity.healthbar.value-=self.gun.dmg
+                         
                           else:
                               mouse.hovered_entity.target.score+=5
+                              mouse.hovered_entity.target.health+=10
+                              Audio('heal.mp3').play()
+                        
                               destroy(mouse.hovered_entity)  
       except AttributeError:pass
       destroy(self)
@@ -78,10 +79,11 @@ class melee(Entity):
    def __init__(self,**kwargs):
       super().__init__(self,model='melee.glb',scale=0.2,parent=camera.ui,visible=True,position=(-0.1,-0.6),rotation=(0,-20,10),**kwargs)
       self.equipped=False
-      self.dmg=0
+      self.dmg=100
       self.tip = Entity(parent = self, position = (.7,-0.5))
-         
+      self.audio=Audio('sword.mp3',False)   
    def cut(self):
+         self.audio.play()
          self.animate_position((0.2,-0.6),duration=0.2,curve=curve.linear)         
          self.animate_rotation((0,-50,-75),duration=0.2,curve=curve.linear)
          self.animate_position((0,-0.6),0.3,delay=0.2,curve=curve.linear) 
@@ -103,5 +105,5 @@ class rifle(gun):
       self.reloadtime=2.5
       self.firerate=0.05
       self.magazine=5
-      self.dmg=10
+      self.dmg=50
              
