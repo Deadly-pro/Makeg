@@ -1,7 +1,7 @@
 from ursina import *
 import player
 import enemy
-game=Ursina(title='Game')
+game=Ursina(title='Game',Fullscreen=True)
 class MenuButton(Button):
     def __init__(self, text='', **kwargs):
         super().__init__(text, scale=(.25, .075), highlight_color=color.azure, **kwargs)
