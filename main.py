@@ -4,8 +4,9 @@ import player
 import enemy
 import guns
 import random
+import os
 
-application.asset_folder=Path(r"C:\Users\yoy91\Desktop\makeg1\assets") 
+application.asset_folder=Path(os.getcwd()+"\\assets") 
 models=['AKM.glb','melee.glb','WALL_B.glb','WALL_F.glb','WALL_L.glb','WALL_R.glb']
 
 def loader():
